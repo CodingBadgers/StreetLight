@@ -1,41 +1,38 @@
 name: StreetLights
-main: com.thijsdev.streetlights.streetlights
+main: com.thijsdev.StreetLights.StreetLights
 version: 1.1.0
 commands:
    sl:
       description: Streetlight
-      usage: /sl {save|list|clear|edit|on|off|reload}
+      usage: /sl {save|list|clear|create|info|reload}
 permissions:
     streetlights.*:
       description: Allows all permissions
       children:
-        streetlights.edit: true
+        streetlights.create: true
+        streetlights.remove: true
         streetlights.save: true
         streetlights.list: true
-        streetlights.update: true
         streetlights.clear: true
         streetlights.reload: true
         streetlights.info: true
     streetlights.info:
       description: Displays info about the selected streetlight
       default: true
-    streetlights.edit:
-      description: Allows to add and remove new streetlights
+    streetlights.admin:
+      description: Allows to add or remove other people's streetlights
       default: op
-    streetlights.edit.start:
-      description: Allows user to add lights to the list
+    streetlights.create:
+      description: Allows to create new streetlights
       default: op
-    streetlights.edit.stop:
-      description: Allows user to add lights to the list
+    streetlights.remove:
+      description: Allows to remove new streetlights
       default: op
     streetlights.save:
       description: Allows user to save the list with lights
       default: op
     streetlights.list:
       description: Allows user to view coordinate list of lights
-      default: op
-    streetlights.update:
-      description: Allows users to force an update on the lights
       default: op
     streetlights.clear:
       description: Allows user to clear all the lights
