@@ -1,4 +1,4 @@
-package com.thijsdev.StreetLights;
+package com.thijsdev.streetlights;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -11,42 +11,34 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockRedstoneEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.weather.WeatherChangeEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import com.thijsdev.etc.Configuration;
-import com.thijsdev.etc.Functions;
-
-
-public class StreetLights extends JavaPlugin implements Listener {
+public class streetlights extends JavaPlugin implements Listener {
 	public static File directory;
 
 	private Logger log;
-	public ArrayList<String[]> pendingBlocks = new ArrayList<String[]>();
-	public ArrayList<Material> onstate_mats = new ArrayList<Material>();
-	public ArrayList<Material> offstate_mats = new ArrayList<Material>();
-	public Map<World, Boolean> World_Light_Status = new HashMap<World, Boolean>();
-	public Map<Player, String> status = new HashMap<Player, String>();
-	
-	public Functions func;
-	public Configuration conf;
+	private static ArrayList<String[]> pendingBlocks = new ArrayList<String[]>();
+	private static ArrayList<Material> onstate_mats = new ArrayList<Material>();
+	private static ArrayList<Material> offstate_mats = new ArrayList<Material>();
+	private Map<World, Boolean> World_Light_Status = new HashMap<World, Boolean>();
 
-	public int config_on_time, config_off_time;
-	public boolean config_use_rain;
+	private boolean edit = false;
+
+	private int config_on_time, config_off_time;
+	private boolean config_use_rain;
 
 	public void onEnable() {
-		// Register Events
-		getServer().getPluginManager().registerEvents(this, this);
-		(new StreetLightsBlockListner(this)).registerEvents();
-		(new StreetLightsPlayerListner(this)).registerEvents();
-		(new StreetLightsWeatherListner(this)).registerEvents();
-		func = new Functions(this);
-		conf = new Configuration(this);
-		
-		//Other stuff
 		directory = getDataFolder();
 		if (!directory.exists())
 			directory.mkdir();
@@ -55,15 +47,36 @@ public class StreetLights extends JavaPlugin implements Listener {
 			if (world.getTime() > config_on_time) {
 				World_Light_Status.put(world, true);
 			}
-			if (world.getTime() > config_off_time && world.getTime() < config_on_time) {
+			if (world.getTime() > config_off_time
+					&& world.getTime() < config_on_time) {
 				World_Light_Status.put(world, false);
 			}
 		}
 
-		conf.loadConfig();
+		loadConfig();
 		log = this.getLogger();
 		log.info("Streetlights is now enabled.");
+		getServer().getPluginManager().registerEvents(this, this);
 		startTimeCheck();
+	}
+
+	private void loadConfig() {
+		getConfig().options().copyDefaults(true);
+		saveConfig();
+
+		config_on_time = getConfig().getInt("Time_on");
+		config_off_time = getConfig().getInt("Time_off");
+		config_use_rain = getConfig().getBoolean("On_when_rain");
+
+		for (String string : getConfig().getStringList("materials")) {
+			onstate_mats.add(Material.getMaterial(string.split(",")[0]));
+		}
+		for (String string : getConfig().getStringList("materials")) {
+			offstate_mats.add(Material.getMaterial(string.split(",")[1]));
+		}
+		for (String string : getConfig().getStringList("lights")) {
+			pendingBlocks.add(string.split(",", 6));
+		}
 	}
 
 	public void onDisable() {
@@ -71,35 +84,211 @@ public class StreetLights extends JavaPlugin implements Listener {
 		log.info("Streetlights is now disabled.");
 	}
 
+	public Material getmatchingmaterial(Integer blockset, boolean onoff) {
+		if (onoff == true) {
+			return offstate_mats.get(blockset);
+		} else {
+			return onstate_mats.get(blockset);
+		}
+	}
+
+	public Integer getmaterialset(Material mat) {
+		for (int i = 0; i < offstate_mats.size(); i++) {
+			if (offstate_mats.get(i) == mat) {
+				return i;
+			}
+		}
+		for (int i = 0; i < onstate_mats.size(); i++) {
+			if (onstate_mats.get(i) == mat) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	public void togglelights(boolean aanuit, int wereld) {
+		if (pendingBlocks != null) {
+			if (pendingBlocks.size() >= 0) {
+				for (int i = 0; i < pendingBlocks.size(); i++) {
+					String[] element = pendingBlocks.get(i);
+					if (Integer.parseInt(element[4]) == wereld) {
+						Block blokje = Bukkit.getWorld(
+								getServer().getWorlds()
+										.get(Integer.parseInt(element[4]))
+										.getName()).getBlockAt(
+								Integer.parseInt(element[1]),
+								Integer.parseInt(element[2]),
+								Integer.parseInt(element[3]));
+						if (World_Light_Status.get(blokje.getWorld()) == true
+								|| aanuit == true) {
+							blokje.setType(getmatchingmaterial(
+									Integer.parseInt(element[5]), false));
+						} else {
+							blokje.setType(getmatchingmaterial(
+									Integer.parseInt(element[5]), true));
+						}
+					}
+				}
+			}
+		}
+	}
+
+	@EventHandler
+	public void onWeatherChange(WeatherChangeEvent event) {
+		if (config_use_rain == true) {
+			int worldid = 0;
+			for (int a = 0; a < getServer().getWorlds().size(); a++) {
+				if (event.getWorld() == getServer().getWorlds().get(a)) {
+					worldid = a;
+				}
+			}
+			if (event.toWeatherState() == true) {
+				togglelights(true, worldid);
+			} else {
+				togglelights(false, worldid);
+			}
+		}
+	}
+
+	@EventHandler
+	public void onBlockRedstone(BlockRedstoneEvent event) {
+		if (pendingBlocks != null) {
+			Block block = event.getBlock();
+			if (block.getType() == Material.REDSTONE_LAMP_ON) {
+				int worldid = 0;
+				for (int a = 0; a < getServer().getWorlds().size(); a++) {
+					if (block.getWorld() == getServer().getWorlds().get(a)) {
+						worldid = a;
+					}
+				}
+				for (int b = 0; b < pendingBlocks.size(); b++) {
+					if (Integer.parseInt(pendingBlocks.get(b)[1]) == block
+							.getX()
+							&& Integer.parseInt(pendingBlocks.get(b)[2]) == block
+									.getY()
+							&& Integer.parseInt(pendingBlocks.get(b)[3]) == block
+									.getZ()
+							&& Integer.parseInt(pendingBlocks.get(b)[4]) == worldid) {
+						event.setNewCurrent(100);
+					}
+				}
+			}
+		}
+	}
+
+	@EventHandler
+	public void onBlockBreak(BlockBreakEvent event) {
+		Block block = event.getBlock();
+		for (int b = 0; b < pendingBlocks.size(); b++) {
+			int worldid = 0;
+			for (int a = 0; a < getServer().getWorlds().size(); a++) {
+				if (block.getWorld() == getServer().getWorlds().get(a)) {
+					worldid = a;
+				}
+			}
+			if (Integer.parseInt(pendingBlocks.get(b)[1]) == block.getX()
+					&& Integer.parseInt(pendingBlocks.get(b)[2]) == block
+							.getY()
+					&& Integer.parseInt(pendingBlocks.get(b)[3]) == block
+							.getZ()
+					&& Integer.parseInt(pendingBlocks.get(b)[4]) == worldid) {
+				if(pendingBlocks.get(b)[0] == event.getPlayer().getName() || event.getPlayer().isOp()) {
+					pendingBlocks.remove(b);
+					event.getPlayer().sendMessage(
+						ChatColor.RED + "StreetLight Removed");
+				}else{
+					event.getPlayer().sendMessage(
+							ChatColor.RED + "This is not your streetlight!");
+				}
+			}
+		}
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onPlayerInteract(PlayerInteractEvent event) {
+		if (edit == true) {
+			Block block = event.getClickedBlock();
+			Player player = event.getPlayer();
+			if (onstate_mats.contains(block.getType())
+					|| offstate_mats.contains(block.getType())) {
+				int worldid = 0;
+				for (int a = 0; a < getServer().getWorlds().size(); a++) {
+					if (block.getWorld() == getServer().getWorlds().get(a)) {
+						worldid = a;
+					}
+				}
+				String[] coords = { player.getName(),
+						Integer.toString(block.getX()),
+						Integer.toString(block.getY()),
+						Integer.toString(block.getZ()),
+						Integer.toString(worldid),
+						Integer.toString(getmaterialset(block.getType())) };
+
+				// Turn it on or off
+				if (World_Light_Status.get(block.getWorld()) == true) {
+					block.setType(getmatchingmaterial(
+							getmaterialset(block.getType()), false));
+				} else {
+					block.setType(getmatchingmaterial(
+							getmaterialset(block.getType()), true));
+				}
+				if (pendingBlocks != null) {
+					if (!pendingBlocks.contains(coords)) {
+						pendingBlocks.add(coords);
+						player.sendMessage("Lamp added.");
+					}
+				}
+			} else {
+				player.sendMessage(block.getType().toString());
+			}
+		}
+	}
+
 	public void startTimeCheck() {
-		getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
+		getServer().getScheduler().scheduleAsyncRepeatingTask(this,
+				new Runnable() {
 					public void run() {
+						// getServer().broadcastMessage(Boolean.toString(switched_sl_state));
+						// World world =
+						// Bukkit.getWorlds().get(getConfig().getInt("World"));
 						for (World world : Bukkit.getWorlds()) {
+							int worldid = 0;
+							for (int a = 0; a < getServer().getWorlds().size(); a++) {
+								if (world == getServer().getWorlds().get(a)) {
+									worldid = a;
+								}
+							}
+
 							for (World wereld : Bukkit.getWorlds()) {
 								if (!World_Light_Status.containsKey(wereld)) {
 									if (wereld.getTime() > config_on_time) {
 										World_Light_Status.put(wereld, true);
 									}
-									if (wereld.getTime() > config_off_time && wereld.getTime() < config_on_time) {
+									if (wereld.getTime() > config_off_time
+											&& wereld.getTime() < config_on_time) {
 										World_Light_Status.put(wereld, false);
 									}
 								}
 							}
 
-							if (world.getTime() > config_on_time && World_Light_Status.get(world) == false) {
+							if (world.getTime() > config_on_time
+									&& World_Light_Status.get(world) == false) {
 								World_Light_Status.put(world, true);
-								func.togglelights(false, world.getName());
+								togglelights(false, worldid);
 							}
-							if (world.getTime() > config_off_time && world.getTime() < config_on_time && World_Light_Status.get(world) == true) {
+							if (world.getTime() > config_off_time
+									&& world.getTime() < config_on_time
+									&& World_Light_Status.get(world) == true) {
 								World_Light_Status.put(world, false);
-								func.togglelights(false, world.getName());
+								togglelights(false, worldid);
 							}
 						}
 					}
 				}, 0L, 60L);
 	}
 
-	public boolean onCommand(CommandSender sender, Command cmd, String commandLabel, String[] args) {
+	public boolean onCommand(CommandSender sender, Command cmd,
+			String commandLabel, String[] args) {
 		Player player = null;
 		if (sender instanceof Player) {
 			player = (Player) sender;
@@ -110,132 +299,133 @@ public class StreetLights extends JavaPlugin implements Listener {
 				sender.sendMessage("This command can only be run by a player");
 			} else {
 				if (args.length > 0) {
-					if (args[0].equalsIgnoreCase("info")) {
+					if (args[0].equals("info")) {
 						if (player.hasPermission("streetlights.info")) {
-							if(status.get(player) == null) {
-								status.put(player, "");
-							}
-							if (!status.get(player).equalsIgnoreCase("info")) {
-								status.put(player, "info");
-								player.sendMessage("Please click a streetlight to get info about it.");
-							} else {
-								status.put(player, "");
-								player.sendMessage("You're out info mode now");
-							}
-						} else {
-							player.sendMessage(ChatColor.RED + "You don't have the permission to do this.");
+							player.sendMessage("You have the permission");
 						}
 						return true;
 					}
-					if (args[0].equalsIgnoreCase("reload")) {
+					if (args[0].equals("reload")) {
 						if (player.hasPermission("streetlights.reload")) {
 							this.reloadConfig();
 
 							onstate_mats.clear();
 							offstate_mats.clear();
 							pendingBlocks.clear();
-
-							for (String string : getConfig().getStringList("materials")) {
-								onstate_mats.add(Material.getMaterial(string.split(",")[0]));
+							
+							for (String string : getConfig().getStringList(
+									"materials")) {
+								onstate_mats.add(Material.getMaterial(string
+										.split(",")[0]));
 							}
-							for (String string : getConfig().getStringList("materials")) {
-								offstate_mats.add(Material.getMaterial(string.split(",")[1]));
+							for (String string : getConfig().getStringList(
+									"materials")) {
+								offstate_mats.add(Material.getMaterial(string
+										.split(",")[1]));
 							}
-							for (String string : getConfig().getStringList("lights")) {
+							for (String string : getConfig().getStringList(
+									"lights")) {
 								pendingBlocks.add(string.split(",", 6));
 							}
-
+							
 							config_on_time = getConfig().getInt("Time_on");
 							config_off_time = getConfig().getInt("Time_off");
 							config_use_rain = getConfig().getBoolean("On_when_rain");
 
-							player.sendMessage(ChatColor.RED + "Config Reloaded!");
+							player.sendMessage(ChatColor.RED
+									+ "Config Reloaded!");
 						}
 						return true;
 					}
-					if (args[0].equalsIgnoreCase("save")) {
+					if (args[0].equals("save")) {
 						if (player.hasPermission("streetlights.save")) {
-							String[] listOfStrings = new String[pendingBlocks.size()];
+							String[] listOfStrings = new String[pendingBlocks
+									.size()];
 							Integer count = 0;
 							for (String[] array : pendingBlocks) {
-								listOfStrings[count] = array[0] + "," + array[1] + "," + array[2] + "," + array[3] + "," + array[4] + "," + array[5];
+								listOfStrings[count] = array[0] + ","
+										+ array[1] + "," + array[2] + ","
+										+ array[3] + "," + array[4] + ","
+										+ array[5];
 								count++;
 							}
-							this.getConfig().set("lights", Arrays.asList(listOfStrings));
+							this.getConfig().set("lights",
+									Arrays.asList(listOfStrings));
 							saveConfig();
 							player.sendMessage("Saved!");
 						} else {
-							player.sendMessage(ChatColor.RED + "You don't have the permission to do this.");
+							player.sendMessage(ChatColor.RED
+									+ "You don't have the permission to do this.");
 						}
 						return true;
 					}
-					if (args[0].equalsIgnoreCase("list")) {
+					if (args[0].equals("list")) {
 						if (player.hasPermission("streetlights.list")) {
 							for (int i = 0; i < pendingBlocks.size(); i++) {
 								String[] element = pendingBlocks.get(i);
-								player.sendMessage("Loc: " + element[1] + "," + element[2] + "," + element[3]);
+								player.sendMessage("Loc: " + element[1] + ","
+										+ element[2] + "," + element[3]);
 							}
 						} else {
-							player.sendMessage(ChatColor.RED + "You don't have the permission to do this.");
+							player.sendMessage(ChatColor.RED
+									+ "You don't have the permission to do this.");
 						}
 						return true;
 					}
-					if (args[0].equalsIgnoreCase("clear")) {
+					if (args[0].equals("clear")) {
 						if (player.hasPermission("streetlights.clear")) {
 							pendingBlocks.clear();
 							player.sendMessage("List is now cleared!");
 						} else {
-							player.sendMessage(ChatColor.RED + "You don't have the permission to do this.");
-						}
-						return true;
-					}/*
-					if (args[0].equalsIgnoreCase("on")) {
-						if (player.hasPermission("streetlights.update")) {
-							func.togglelights(true, player.getWorld().getName());
-						} else {
-							player.sendMessage(ChatColor.RED + "You don't have the permission to do this.");
+							player.sendMessage(ChatColor.RED
+									+ "You don't have the permission to do this.");
 						}
 						return true;
 					}
-					if (args[0].equalsIgnoreCase("off")) {
+					if (args[0].equals("on")) {
 						if (player.hasPermission("streetlights.update")) {
-							func.togglelights(false, player.getWorld().getName());
+							int worldid = 0;
+							for (int a = 0; a < getServer().getWorlds().size(); a++) {
+								if (player.getWorld() == getServer()
+										.getWorlds().get(a)) {
+									worldid = a;
+								}
+							}
+							togglelights(true, worldid);
 						} else {
-							player.sendMessage(ChatColor.RED + "You don't have the permission to do this.");
+							player.sendMessage(ChatColor.RED
+									+ "You don't have the permission to do this.");
 						}
 						return true;
-					}*/
-					if (args[0].equalsIgnoreCase("create")) {
-						if (player.hasPermission("streetlights.create")) {
-							if(status.get(player) == null) {
-								status.put(player, "");
+					}
+					if (args[0].equals("off")) {
+						if (player.hasPermission("streetlights.update")) {
+							int worldid = 0;
+							for (int a = 0; a < getServer().getWorlds().size(); a++) {
+								if (player.getWorld() == getServer()
+										.getWorlds().get(a)) {
+									worldid = a;
+								}
 							}
-							if (!status.get(player).equalsIgnoreCase("create")) {
-								status.put(player, "create");
+							togglelights(false, worldid);
+						} else {
+							player.sendMessage(ChatColor.RED
+									+ "You don't have the permission to do this.");
+						}
+						return true;
+					}
+					if (args[0].equals("edit")) {
+						if (player.hasPermission("streetlights.edit")) {
+							if(edit == false) {
+								edit = true;
 								player.sendMessage("You can now add lights to the list!");
-							} else {
-								status.put(player, "");
-								player.sendMessage("You're done creating streetlights now!");
+							}else{
+								edit = false;
+								player.sendMessage("You're done editing now!");
 							}
 						} else {
-							player.sendMessage(ChatColor.RED + "You don't have the permission to do this.");
-						}
-						return true;
-					}
-					if (args[0].equalsIgnoreCase("remove")) {
-						if (player.hasPermission("streetlights.remove")) {
-							if(status.get(player) == null) {
-								status.put(player, "");
-							}
-							if (!status.get(player).equalsIgnoreCase("remove")) {
-								status.put(player, "remove");
-								player.sendMessage("You can now remove streetlights");
-							} else {
-								status.put(player, "");
-								player.sendMessage("You're done removing streetlights now!");
-							}
-						} else {
-							player.sendMessage(ChatColor.RED + "You don't have the permission to do this.");
+							player.sendMessage(ChatColor.RED
+									+ "You don't have the permission to do this.");
 						}
 						return true;
 					}
