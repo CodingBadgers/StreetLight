@@ -1,10 +1,10 @@
 name: StreetLights
 main: com.thijsdev.StreetLights.StreetLights
-version: 1.1.0
+version: 1.1.2
 commands:
    sl:
       description: Streetlight
-      usage: /sl {save|list|clear|create|info|reload}
+      usage: /sl {save|list|clear|create|info|reload|remove}
 permissions:
     streetlights.*:
       description: Allows all permissions
