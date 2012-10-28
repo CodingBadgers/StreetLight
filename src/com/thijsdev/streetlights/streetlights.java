@@ -51,6 +51,8 @@ public class StreetLights extends JavaPlugin implements Listener {
 		if (!directory.exists())
 			directory.mkdir();
 
+		conf.loadConfig();
+
 		for (World world : Bukkit.getWorlds()) {
 			if (world.getTime() > config_on_time) {
 				World_Light_Status.put(world, true);
@@ -60,7 +62,6 @@ public class StreetLights extends JavaPlugin implements Listener {
 			}
 		}
 
-		conf.loadConfig();
 		log = this.getLogger();
 		log.info("Streetlights is now enabled.");
 		startTimeCheck();
