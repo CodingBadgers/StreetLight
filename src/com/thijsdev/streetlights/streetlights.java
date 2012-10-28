@@ -75,14 +75,12 @@ public class StreetLights extends JavaPlugin implements Listener {
 		getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable() {
 					public void run() {
 						for (World world : Bukkit.getWorlds()) {
-							for (World wereld : Bukkit.getWorlds()) {
-								if (!World_Light_Status.containsKey(wereld)) {
-									if (wereld.getTime() > config_on_time) {
-										World_Light_Status.put(wereld, true);
-									}
-									if (wereld.getTime() > config_off_time && wereld.getTime() < config_on_time) {
-										World_Light_Status.put(wereld, false);
-									}
+							if (!World_Light_Status.containsKey(world)) {
+								if (world.getTime() > config_on_time) {
+									World_Light_Status.put(world, true);
+								}
+								if (world.getTime() > config_off_time && world.getTime() < config_on_time) {
+									World_Light_Status.put(world, false);
 								}
 							}
 
