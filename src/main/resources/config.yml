@@ -1,0 +1,6 @@
+Time_on: 13000
+Time_off: 0
+On_when_rain: true
+materials:
+- REDSTONE_LAMP_ON,REDSTONE_LAMP_OFF
+lights: []

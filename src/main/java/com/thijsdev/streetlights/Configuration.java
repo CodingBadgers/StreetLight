@@ -1,10 +1,10 @@
-package com.thijsdev.etc;
+package com.thijsdev.streetlights;
 
 import java.util.Arrays;
 
 import org.bukkit.Material;
 
-import com.thijsdev.StreetLights.StreetLights;
+import com.thijsdev.streetlights.StreetLights;
 
 public class Configuration {
 	private StreetLights plugin;

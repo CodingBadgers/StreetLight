@@ -1,4 +1,4 @@
-package com.thijsdev.StreetLights;
+package com.thijsdev.streetlights;
 
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
